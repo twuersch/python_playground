@@ -18,21 +18,13 @@ def duration(value, arg = "%h:%m"):
     h -- hours, 0...23
     H -- hours, integer, values > 23 possible
     o -- hours, 2 decimals, 0...23.99
-    O -- hours, 2 decimals, values > 23 possible
+    O -- hours, 2 decimals, values > 24 possible
     D -- days, integer
     """
     
     # Fail silently if the value is not a timedelta.
     if not isinstance(value, timedelta):
         return ""
-    
-    # Dissect value
-    totalSeconds = (value.microseconds + (value.seconds + value.days * 24 * 3600) * 10**6) / float(10**6)
-    totalDays, remainder = divmod(totalSeconds, 86400)
-    modHours, remainder = divmod(remainder, 3600)
-    modMinutes, modSeconds = divmod(remainder, 60)
-    totalHours = math.floor(totalSeconds / 3600)
-    totalMinutes = math.floor(totalSeconds / 60)
 
     # Pass 1: Determine which is the smallest unit we have to display
     awaitingFormatIdentifier = False
@@ -62,10 +54,26 @@ def duration(value, arg = "%h:%m"):
             else:
                 pass
     
-    print("seconds_smallest_unit: " + str(seconds_smallest_unit))
-    print("minutes_smallest_unit: " + str(minutes_smallest_unit))
-    print("hours_smallest_unit: " + str(hours_smallest_unit))
-    print("days_smallest_unit: " + str(days_smallest_unit))
+    # Now, dissect value and add rounding where necessary
+    totalSeconds = (value.microseconds + (value.seconds + value.days * 24 * 3600) * 10**6) / float(10**6)
+    
+    unroundedTotalDays, remainder = divmod(totalSeconds, 86400)
+    unroundedModHours, remainder = divmod(remainder, 3600)
+    unroundedModMinutes, unroundedModSeconds = divmod(remainder, 60)
+    unroundedTotalHours = math.floor(totalSeconds / 3600)
+    unroundedTotalMinutes = math.floor(totalSeconds / 60)
+    
+    if days_smallest_unit and divmod(totalSeconds, 86400)[1] >= 43200:
+        totalSeconds = totalSeconds + 86400
+    elif hours_smallest_unit and divmod(totalSeconds, 3600)[1] >= 1800:
+        totalSeconds = totalSeconds + 3600
+    elif minutes_smallest_unit and divmod(totalSeconds, 60)[1] >= 30:
+        totalSeconds = totalSeconds + 60
+    totalDays, remainder = divmod(totalSeconds, 86400)
+    modHours, remainder = divmod(remainder, 3600)
+    modMinutes, modSeconds = divmod(remainder, 60)
+    totalHours = math.floor(totalSeconds / 3600)
+    totalMinutes = math.floor(totalSeconds / 60)
     
     # Pass 2: Assemble the output
     niceOutput = ""
@@ -92,10 +100,10 @@ def duration(value, arg = "%h:%m"):
                 elif c == "H":
                     niceOutput = niceOutput + str(int(totalHours))
                 elif c == "o":
-                    decimalModHours = modHours + (modMinutes / 60)
+                    decimalModHours = unroundedModHours + (unroundedModMinutes / 60)
                     niceOutput = niceOutput + ("%.2f" % decimalModHours)
                 elif c == "O":
-                    decimalTotalHours = totalHours + (modMinutes / 60)
+                    decimalTotalHours = unroundedTotalHours + (unroundedModMinutes / 60)
                     niceOutput = niceOutput + ("%.2f" % decimalTotalHours)
                 elif c == "D":
                     niceOutput = niceOutput + str(int(totalDays))
@@ -106,6 +114,3 @@ def duration(value, arg = "%h:%m"):
                 niceOutput = niceOutput + c
     return niceOutput
 
-td1 = timedelta(1, 3631)
-# print(duration(td1, " %m %h %S  %M %H %O"))
-print(duration(td1))
